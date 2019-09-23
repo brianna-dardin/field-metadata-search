@@ -1,3 +1,5 @@
+import re
+
 class Search:
     metadata = None
     field = None
@@ -21,16 +23,52 @@ class Search:
                         level = top.find_all(tag)
                         if len(level) > 0:
                             for node in level:
-                                if self.field.api_name.lower() in node.text.lower():
+                                if self.field.check_field(node.text,self.file_name):
                                     parents.append(top)
                 else: #if len(self.meta_dict[key]) == 0
                     children = top.contents
                     for child in children:
-                        if self.field.api_name in child:
-                            print(child.name)
+                        if self.field.check_field(str(child),self.file_name):
                             self._log_match(key,child.name)
             if len(parents) > 0:
                 self._log_matches(parents,key)
+    
+    def search_flow(self):
+        main_obj = False
+        obj_tags = self.metadata.find_all('objectType')
+        for obj in obj_tags:
+            if self.field.sobject_name in obj.text:
+                main_obj = True
+                break
+        
+        fields = []
+        pattern = re.compile(r'[^a-zA-Z_.]')
+        if main_obj:
+            var_names = ['myVariable_current','myVariable_old']
+            meta_text = self.metadata.findChild(recursive=False).text
+            for name in var_names:
+                indices = re.finditer(name,meta_text)
+                for i in indices:
+                    idx = i.start()
+                    trun_text = meta_text[idx:]
+                    pattern_found = pattern.findall(trun_text)
+                    if len(pattern_found) > 0:
+                        char = pattern_found[0]
+                        char_idx = trun_text.find(char)
+                        fld = trun_text[len(name)+1:char_idx]
+                        if self.field.check_field(fld,self.file_name):
+                            fields.append(fld)
+        
+        if len(fields) == 0:
+            other_tags = self.metadata.find_all('object')
+            for tag in other_tags:
+                field_tags = tag.parent.find_all('field')
+                for fld_tag in field_tags:
+                    if self.field.check_field(fld_tag.text,self.file_name):
+                        fields.append(fld_tag.text)
+                
+        if len(fields) > 0:
+            self._log_match(self.meta_type,self.file_name)
     
     def find_templates(self,names):
         temp_tags = ['template','notifyToTemplate']

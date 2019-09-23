@@ -36,7 +36,7 @@ class Retrieval:
         headers['SOAPAction'] = action
         status_env = self._create_envelope({'asyncProcessId' : process_id, 'type' : action})
         
-        # turns into just under 10 minutes; should be adjusted for bigger orgs
+        # turns into just under 10 minutes; should be adjusted for bigger or
         max_requests = 10
         num_requests = 1
         sleep_time = 10

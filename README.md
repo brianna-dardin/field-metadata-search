@@ -8,7 +8,7 @@ The program is currently designed as a command line utility. Download all the fi
 
 - This only looks at custom fields. The idea is to focus only on fields that can be deleted, which standard fields cannot.
 
-- This program currently does NOT attempt field disambiguation. That is, it doesn't determine which object the field belongs to. This becomes a major issue if your sObjects share fields with the same API name. To mitigate this somewhat, the filename is also returned in the CSV file. Ultimately, this makes this tool not very useful. In a future update I plan to address this.
+- This program performs field disambiguation (that is, determining whether a mention of a field in a file belongs to the field in the specified object) for everything except code. While it's possible, code is unstructured and unpredictable, which makes disambiguation more challenging. Also, when it comes to relationship fields, the disambiguation only works for fields that are named after the object. For example, Opportunity looks up to CustomObject__c, and the lookup field's API name is also CustomObject__c. This program will find fields prefaced with CustomObject__r and log those, but if the lookup field's API name is SomeOtherName__c, it won't log any fields prefaced with SomeOtherName__r.  
 
 - This was designed with smaller orgs in mind that don't have as much metadata to download. This will not be scalable to massive orgs.
 

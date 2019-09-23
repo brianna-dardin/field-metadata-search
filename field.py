@@ -1,13 +1,52 @@
+import re
 import os
 import pandas as pd
 
 class Field:
     api_name = ''
     sobject_name = ''
+    _pattern = None
     
     def __init__(self, api_name, sobject_name):
         self.api_name = api_name
         self.sobject_name = sobject_name
+        self._pattern = re.compile(r'[^a-zA-Z_]')
+        
+    def check_field(self, meta_text, file_name):
+        if self.api_name.lower() in meta_text.lower():
+            relationships = self._check_relationship(meta_text)
+            obj = self.sobject_name.replace('__c','__r')
+            if len(relationships) > 0:
+                present = []
+                for rel in relationships:
+                    if obj in file_name or obj in rel:
+                        present.append(1)
+                    else:
+                        if obj in rel:
+                            present.append(1)
+                        else:
+                            present.append(0)
+                return sum(present) > 0
+            else:
+                return obj in file_name
+        else:
+            return False
+    
+    def _check_relationship(self,meta_text):
+        indices = re.finditer(self.api_name,meta_text)
+        relationships = []
+        for i in indices:
+            idx = i.start()
+            trun_text = meta_text[:idx]
+            if '.' in trun_text:
+                pattern_found = self._pattern.findall(meta_text[:idx-2])
+                if len(pattern_found) > 0:
+                    char = pattern_found[::-1][0]
+                    reverse_idx = trun_text[::-1].find(char)
+                    char_idx = len(trun_text)-reverse_idx
+                    rel = trun_text[char_idx:-1]
+                    relationships.append(rel)
+        return relationships
         
     def add_metadata(self, meta_dict, file_name):
         for key in meta_dict.keys():

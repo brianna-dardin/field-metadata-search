@@ -19,11 +19,11 @@ def main():
         else:
             print('Invalid input. Please answer yes or no only.')
     
-    auth_url = '.salesforce.com/services/oauth2/token'
+    auth_url = 'https://{}.salesforce.com/services/oauth2/token'
     if 'y' in sandbox:
-        auth_url = 'https://test' + auth_url
+        auth_url = auth_url.format('test')
     else:
-        auth_url = 'https://login' + auth_url
+        auth_url = auth_url.format('login')
     
     params = {'grant_type' : 'password',
               'client_id' : CLIENT_ID,
