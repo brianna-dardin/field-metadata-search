@@ -111,13 +111,15 @@ class Search:
                     act_name = act.find('name')
                     for name in names:
                         if name in act_name.text:
-                            if 'workflow' in self.meta_type:
-                                if act.parent:
-                                    parents.append(act.parent)
-                            else:
-                                parent = self.metadata.findChild(recursive=False)
-                                if parent:
+                            parent = self.metadata.findChild(recursive=False)
+                            if self.field.sobject_name in self.file_name:
+                                if 'workflow' in self.meta_type:
+                                    if act.parent:
+                                        parents.append(act.parent)
+                                elif parent:
                                     parents.append(parent)
+                            elif 'flow' in self.meta_type and parent:
+                                parents.append(parent)
             if len(parents) > 0:
                 if 'workflow' in self.meta_type:
                     self._log_matches(parents,'rules')

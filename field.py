@@ -56,7 +56,7 @@ class Field:
                 print(self.api_name, 'found in', key, meta)
                 meta_row = [self.api_name, key, meta, file_name]
                 rows.append(meta_row)
-                    
+                
         meta_path = os.path.join(os.getcwd(),self.sobject_name+' metadata.csv')
         meta_df = pd.read_csv(meta_path,sep=',')
         
