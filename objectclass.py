@@ -61,15 +61,16 @@ class Object:
         field_df = pd.DataFrame(rows,columns=['API Name','CreatedDate','LastModifiedDate'])
         field_df.to_csv(field_path,index=False)
         
-    def search_fields(self):
+    def search_fields(self, perm = False):
         saved_objs = {'workflows' : {},
                       'approvalProcesses' : {},
                       'flows' : {},
                       'assignmentRules' : {},
                       'escalationRules' : {}}
         
+        permissions = ['profiles','permissionsets']
         no_check_field = ['aura','classes','components','pages','triggers','layouts']
-        no_search_obj = ['duplicateRules','email','approvalProcesses']
+        no_search_obj = ['duplicateRules','email','approvalProcesses','quickActions']
         search_obj_list = ['assignmentRules','autoResponseRules',
                            'escalationRules','matchingRules','objects',
                            'sharingRules','flows','workflows']
@@ -82,42 +83,54 @@ class Object:
         for (dirpath, dirs, files) in os.walk(os.path.join(os.getcwd(),'src')):
             data_type = os.path.basename(dirpath)
             if data_type in no_search_obj or data_type in search_obj_list\
-                    or data_type in no_check_field or 'email' in dirpath:
+                    or data_type in no_check_field or 'email' in dirpath\
+                    or data_type in permissions:
                 for filename in files:
                     if '-meta.xml' in filename or '.png' in filename or '.jpg' in filename:
                         continue
                     print(data_type,filename)
                     
-                    if filename.find('layout') == -1 or filename.find(self.sobject_name) != -1:     
-                        with open(os.path.join(dirpath,filename), 'rb', 0) as file, \
-                                mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ) as s:
-                            obj = BeautifulSoup(file.read(),'xml')
-                            obj_text = obj.text
-                            if data_type in saved_objs.keys():
-                                saved_objs[data_type][filename] = obj
-                                
-                            for fld in self.fields:
-                                byte_name = fld.api_name.encode('utf-8')
-                                if s.find(byte_name) != -1:
-                                    print(fld.api_name,'found in',filename)
-                                    no_ext_file = filename[:filename.rfind('.')]
+                    if os.stat(os.path.join(dirpath,filename)).st_size > 0:
+                        if filename.find('layout') == -1 or filename.find(self.sobject_name) != -1:     
+                            with open(os.path.join(dirpath,filename), 'rb', 0) as file, \
+                                    mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ) as s:
+                                obj = BeautifulSoup(file.read(),'xml')
+                                obj_text = obj.text
+                                if data_type in saved_objs.keys():
+                                    saved_objs[data_type][filename] = obj
                                     
-                                    if data_type in no_check_field:
-                                        fld.add_metadata({data_type:[no_ext_file]},filename)
-                                    elif fld.check_field(obj_text,filename):
-                                        if data_type in no_search_obj:
+                                readables = []
+                                if perm and data_type in permissions:
+                                    readables = obj.find_all('readable',text='true')
+                                    
+                                for fld in self.fields:
+                                    byte_name = fld.api_name.encode('utf-8')
+                                    if s.find(byte_name) != -1:
+                                        no_ext_file = filename[:filename.rfind('.')]
+                                        
+                                        if len(readables) > 0:
+                                            for read in readables:
+                                                parent = read.parent.text
+                                                if fld.check_field(parent,filename):
+                                                    fld.add_metadata({data_type:[no_ext_file]},filename)
+                                                    break
+                                        
+                                        if data_type in no_check_field:
                                             fld.add_metadata({data_type:[no_ext_file]},filename)
-                                        elif 'email' in dirpath:
-                                            fld.add_metadata({'email':[no_ext_file]},filename)
-                                        else:
-                                            search_obj = Search(obj,fld,filename)
-                                            if 'flow' in data_type:
-                                                if 'work' in data_type:
-                                                    search_obj.search()
-                                                else:
-                                                    search_obj.search_flow()
+                                        elif fld.check_field(obj_text,filename):
+                                            if data_type in no_search_obj:
+                                                fld.add_metadata({data_type:[no_ext_file]},filename)
+                                            elif 'email' in dirpath:
+                                                fld.add_metadata({'email':[no_ext_file]},filename)
                                             else:
-                                                search_obj.search()
+                                                search_obj = Search(obj,fld,filename)
+                                                if 'flow' in data_type:
+                                                    if 'work' in data_type:
+                                                        search_obj.search()
+                                                    else:
+                                                        search_obj.search_flow()
+                                                else:
+                                                    search_obj.search()
         
         self._search_actions(meta_path,saved_objs,True)
         self._search_actions(meta_path,saved_objs,False)

@@ -15,20 +15,20 @@ class Field:
     def check_field(self, meta_text, file_name):
         if self.api_name.lower() in meta_text.lower():
             relationships = self._check_relationship(meta_text)
-            obj = self.sobject_name.replace('__c','__r')
+            rel_obj = self.sobject_name.replace('__c','__r')
             if len(relationships) > 0:
                 present = []
                 for rel in relationships:
-                    if obj in file_name or obj in rel:
+                    if self.sobject_name in file_name or rel_obj in rel:
                         present.append(1)
                     else:
-                        if obj in rel:
+                        if rel_obj in rel:
                             present.append(1)
                         else:
                             present.append(0)
                 return sum(present) > 0
             else:
-                return obj in file_name
+                return self.sobject_name in file_name
         else:
             return False
     
@@ -53,6 +53,7 @@ class Field:
             key_list = list(set(meta_dict[key]))
             rows = []
             for meta in key_list:
+                print(self.api_name, 'found in', key, meta)
                 meta_row = [self.api_name, key, meta, file_name]
                 rows.append(meta_row)
                     

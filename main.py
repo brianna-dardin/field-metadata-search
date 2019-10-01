@@ -52,7 +52,19 @@ def main():
         except:
             print('Invalid input. Please enter a numeric API version.')
         
-    if not os.path.isdir(os.path.join(os.getcwd(),'src')):
+    if os.path.isdir(os.path.join(os.getcwd(),'src')):
+        while True:
+            re_retrieve = input('Would you like to retrieve the metadata again? Type yes or no only. ')
+            re_retrieve = re_retrieve.lower()
+            if 'yes' in re_retrieve or 'no' in re_retrieve:
+                break
+            else:
+                print('Invalid input. Please answer yes or no only.')
+                
+        if 'y' in re_retrieve:
+            soap = Retrieval(api_version,data)
+            soap.retrieve()
+    else:
         soap = Retrieval(api_version,data)
         soap.retrieve()
         
@@ -66,8 +78,21 @@ def main():
             break
         else:
             print('No fields found. Please double check the API name and try again.')
+    
+    search_perm = ''
+    while True:
+        search_perm = input('Analyzing permission sets and profiles takes much longer than other metadata.'\
+                            +' Do you still want to analyze them? Type yes or no only. ')
+        if 'yes' in search_perm or 'no' in search_perm:
+            break
+        else:
+            print('Invalid input. Please answer yes or no only.')
             
-    obj.search_fields()
+    perm = False
+    if 'y' in search_perm:
+        perm = True
+    
+    obj.search_fields(perm)
     
 if __name__ == '__main__':
     main()

@@ -36,8 +36,8 @@ class Retrieval:
         headers['SOAPAction'] = action
         status_env = self._create_envelope({'asyncProcessId' : process_id, 'type' : action})
         
-        # turns into just under 10 minutes; should be adjusted for bigger or
-        max_requests = 10
+        # turns into 20 minutes; may need to be adjusted for bigger orgs
+        max_requests = 15
         num_requests = 1
         sleep_time = 10
         stat_res = None
@@ -133,7 +133,8 @@ class Retrieval:
                           'ApprovalProcess','EmailTemplate','ApexComponent',
                           'AutoResponseRules','DuplicateRule','AssignmentRules',
                           'Layout','MatchingRule','SharingRules','Flow',
-                          'AuraDefinitionBundle','EscalationRules']
+                          'AuraDefinitionBundle','EscalationRules',
+                          'QuickAction','Profile','PermissionSet']
         
         for mt in metadata_types:
             pkg += '<types>'

@@ -125,7 +125,6 @@ class Search:
                     self._log_matches(parents,self.meta_type)
     
     def _log_match(self,key,name):
-        print(key,name)
         self.field.add_metadata({key : [name]},self.file_name)
             
     def _log_matches(self,parents,key):
@@ -140,7 +139,6 @@ class Search:
                 name = parent.find('masterLabel',recursive=False).text
             if name:
                 names.append(name)
-                print(key,name)
                 
         if len(names) > 0:
             self.field.add_metadata({key : names},self.file_name)
@@ -152,9 +150,8 @@ class Search:
         
         if 'object' in self.meta_type:
             self.meta_dict = {'fieldSets' : ['field'],
-                'fields' : ['fullName', 'formula', 'controllingField'],
+                'fields' : ['formula', 'controllingField'],
                 'listViews' : ['columns','field'],
-                'recordTypes' : ['picklist'],
                 'searchLayouts' : [],
                 'validationRules' : ['errorConditionFormula', 'errorDisplayField'],
                 'webLinks' : ['url']}
