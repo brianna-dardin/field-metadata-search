@@ -9,11 +9,13 @@ import os
 class Retrieval:
     api_version = ''
     session_id = ''
+    instance = ''
     req_url = ''
     
     def __init__(self, api_version, response):
         self.api_version = api_version
         self.session_id = response['access_token']
+        self.instance = response['instance_url']
         
         org_id = response['id'].split('/')[-2]
         self.req_url = response['instance_url'] + '/services/Soap/m/'\
@@ -66,6 +68,7 @@ class Retrieval:
                 for msg in details:
                     with open('retrieve_log.txt', 'a') as log:
                         log.write(msg.find('fileName').text + ': ' + msg.find('problem').text + '\n')
+                print('Some items came with warnings. Check retrieve_log.txt for details.')
             
             file = b64decode(stat_res.find('zipFile').text)
             z = ZipFile(io.BytesIO(file))
@@ -100,7 +103,7 @@ class Retrieval:
             env += '</met:checkRetrieveStatus>'
         elif 'list' in params['type']:
             env += '<met:listMetadata>'
-            env += '<met:queries><type>CustomObject</type></met:queries>'
+            env += '<met:queries><type>' + params['meta'] + '</type></met:queries>'
             env += '<met:asOfVersion>' + self.api_version + '</met:asOfVersion>'
             env += '</met:listMetadata>'
         else:
@@ -117,14 +120,18 @@ class Retrieval:
         return env
     
     def _create_package(self):
-        pkg = '<types>'
+        pkg = ''
         
-        # the * operator doesn't work for standard objects, so query all object names
-        objects = self._get_object_names()
-        for obj in objects:
-            pkg += '<members>' + obj + '</members>'
-            
-        pkg += '<name>CustomObject</name></types>'
+        # the * wildcard doesn't work for standard objects or managed object workflows
+        pkg += self._compile_meta_xml('CustomObject')
+        pkg += self._compile_meta_xml('Workflow')
+        
+        # managed layouts are a special case and so need additional processing
+        pkg += '<types><members>*</members>'
+        layout_names = self._get_layouts()
+        for name in layout_names:
+            pkg += '<members>' + name + '</members>'
+        pkg += '<name>Layout</name></types>'
         
         # including everything in one package to reduce API calls, which is fine
         # for smaller orgs. This probably needs to be split up for bigger orgs
@@ -132,9 +139,9 @@ class Retrieval:
         metadata_types = ['Workflow','ApexClass','ApexTrigger','ApexPage',
                           'ApprovalProcess','EmailTemplate','ApexComponent',
                           'AutoResponseRules','DuplicateRule','AssignmentRules',
-                          'Layout','MatchingRule','SharingRules','Flow',
+                          'MatchingRule','SharingRules','Flow','QuickAction',
                           'AuraDefinitionBundle','EscalationRules',
-                          'QuickAction','Profile','PermissionSet']
+                          'Profile','PermissionSet']
         
         for mt in metadata_types:
             pkg += '<types>'
@@ -145,9 +152,19 @@ class Retrieval:
         pkg += '<version>' + self.api_version + '</version>'
         return pkg
     
-    def _get_object_names(self):
+    def _compile_meta_xml(self, meta):
+        pkg = '<types>'
+        objects = self._get_meta_names(meta)
+        for obj in objects:
+            pkg += '<members>' + obj + '</members>'
+        pkg += '<name>' + meta + '</name></types>'
+        return pkg
+    
+    def _get_meta_names(self, meta):
         action = 'listMetadata'
-        env = self._create_envelope({'type' : action})
+        params = {'type' : action,
+                  'meta' : meta}
+        env = self._create_envelope(params)
         headers = {'Content-type': 'text/xml', 'SOAPAction': action}
         
         list_req = requests.post(self.req_url, headers=headers, data=env)
@@ -156,9 +173,41 @@ class Retrieval:
         list_env = BeautifulSoup(list_req.text, "xml")
         list_results = list_env.find_all('result')
         
-        obj_names = []
+        meta_names = []
         for res in list_results:
             name = res.find('fullName').text
-            obj_names.append(name)
+            meta_names.append(name)
         
-        return obj_names
+        return meta_names
+    
+    def _get_layouts(self):
+        request_url = self.instance + '/services/data/v{}/tooling/query?q='.format(self.api_version)
+        headers = {'Authorization' : 'OAuth ' + self.session_id}
+        
+        layout_query = 'SELECT TableEnumOrId, Name, NamespacePrefix FROM Layout WHERE NamespacePrefix != null'
+        r = requests.get(request_url + layout_query, headers=headers)
+        r.raise_for_status()
+        layouts = r.json()['records']
+        
+        obj_query = 'SELECT DurableId, QualifiedApiName FROM EntityDefinition WHERE IsCustomizable = true'
+        r = requests.get(request_url + obj_query, headers=headers)
+        r.raise_for_status()
+        
+        obj_dict = {}
+        for obj in r.json()['records']:
+            obj_dict[obj['DurableId']] = obj['QualifiedApiName']
+        
+        names = []
+        for lay in layouts:
+            obj_id = lay['TableEnumOrId'][:-3]
+            obj_name = ''
+            # this is the ID prefix for objects
+            if '01I' in obj_id and obj_id in obj_dict.keys():
+                obj_name = obj_dict[obj_id]
+            else:
+                obj_name = lay['TableEnumOrId']
+                
+            name = obj_name + '-' + lay['NamespacePrefix'] + '__' + lay['Name']
+            names.append(name)
+                
+        return names

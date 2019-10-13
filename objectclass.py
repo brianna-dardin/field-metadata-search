@@ -8,58 +8,26 @@ import pandas as pd
 
 class Object:
     sobject_name = ''
-    standard = True
     fields = []
     
     def __init__(self, sobject_name):
-        if '__c' in sobject_name or '__x' in sobject_name or '__mdt' in sobject_name:
-            self.standard = False
-        
         self.sobject_name = sobject_name
     
-    def get_fields(self, token, instance, api_version):
+    def get_fields(self, token, instance, api_version):       
         self.fields.clear()
         
         request_url = instance + '/services/data/v{}/tooling/query?q='.format(api_version)
         headers = {'Authorization' : 'OAuth ' + token}
         
-        if self.standard:
-            where_obj = self.sobject_name
-        else:
-            no_suffix = self.sobject_name.replace('__c','').replace('__x','').replace('__mdt','')
-            
-            object_query = "SELECT Id FROM CustomObject WHERE DeveloperName = '{}'".format(no_suffix)
-            r = requests.get(request_url + object_query, headers=headers)
-            r.raise_for_status()
-            
-            where_obj = r.json()['records'][0]['Id']
-        
-        field_query = "SELECT NamespacePrefix,DeveloperName,CreatedDate,LastModifiedDate "\
-                    + "FROM CustomField WHERE TableEnumOrId='{}'".format(where_obj)
+        field_query = "SELECT QualifiedApiName FROM FieldDefinition "\
+            + "WHERE EntityDefinition.QualifiedApiName = '{}'".format(self.sobject_name)
         r = requests.get(request_url + field_query, headers=headers)
         r.raise_for_status()
         
-        rows = []
         for fld in r.json()['records']:
-            if fld['NamespacePrefix']:
-                field_name = fld['NamespacePrefix'] + '__' + fld['DeveloperName']
-            else:
-                field_name = fld['DeveloperName']
-            
-            api_name = field_name + '__c'
-            
-            field = Field(api_name, self.sobject_name)
-            self.fields.append(field)
-            
-            created = fld['CreatedDate'].split('T')[0].replace('-','/')
-            modified = fld['LastModifiedDate'].split('T')[0].replace('-','/')
-            
-            field_row = [api_name, created, modified]
-            rows.append(field_row)
-        
-        field_path = os.path.join(os.getcwd(),self.sobject_name+' fields.csv')
-        field_df = pd.DataFrame(rows,columns=['API Name','CreatedDate','LastModifiedDate'])
-        field_df.to_csv(field_path,index=False)
+            if '__c' in fld['QualifiedApiName']:
+                field = Field(fld['QualifiedApiName'], self.sobject_name)
+                self.fields.append(field)
         
     def search_fields(self, perm = False):
         saved_objs = {'workflows' : {},
@@ -69,9 +37,9 @@ class Object:
                       'escalationRules' : {}}
         
         permissions = ['profiles','permissionsets']
-        no_check_field = ['aura','classes','components','pages','triggers','layouts']
-        no_search_obj = ['duplicateRules','email','approvalProcesses','quickActions']
-        search_obj_list = ['assignmentRules','autoResponseRules',
+        no_check_field = ['classes','components','pages','triggers','layouts']
+        no_search_obj = ['duplicateRules','email','approvalProcesses']
+        search_obj_list = ['assignmentRules','autoResponseRules','quickActions',
                            'escalationRules','matchingRules','objects',
                            'sharingRules','flows','workflows']
         
@@ -84,24 +52,25 @@ class Object:
             data_type = os.path.basename(dirpath)
             if data_type in no_search_obj or data_type in search_obj_list\
                     or data_type in no_check_field or 'email' in dirpath\
-                    or data_type in permissions:
+                    or 'aura' in dirpath or data_type in permissions:
                 for filename in files:
                     if '-meta.xml' in filename or '.png' in filename or '.jpg' in filename:
                         continue
-                    print(data_type,filename)
+                    if not perm and data_type in permissions:
+                        continue
                     
                     if os.stat(os.path.join(dirpath,filename)).st_size > 0:
                         if filename.find('layout') == -1 or filename.find(self.sobject_name) != -1:     
+                            print(data_type,filename)
                             with open(os.path.join(dirpath,filename), 'rb', 0) as file, \
                                     mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ) as s:
-                                obj = BeautifulSoup(file.read(),'xml')
-                                obj_text = obj.text
+                                obj = BeautifulSoup(file.read(), 'xml')
                                 if data_type in saved_objs.keys():
                                     saved_objs[data_type][filename] = obj
-                                    
+                                
                                 readables = []
                                 if perm and data_type in permissions:
-                                    readables = obj.find_all('readable',text='true')
+                                    readables = obj.find_all('readable', text='true')
                                     
                                 for fld in self.fields:
                                     byte_name = fld.api_name.encode('utf-8')
@@ -110,27 +79,22 @@ class Object:
                                         
                                         if len(readables) > 0:
                                             for read in readables:
-                                                parent = read.parent.text
-                                                if fld.check_field(parent,filename):
+                                                if fld.check_field(read.parent,filename):
                                                     fld.add_metadata({data_type:[no_ext_file]},filename)
                                                     break
-                                        
-                                        if data_type in no_check_field:
+                                        elif data_type in no_check_field:
                                             fld.add_metadata({data_type:[no_ext_file]},filename)
-                                        elif fld.check_field(obj_text,filename):
-                                            if data_type in no_search_obj:
+                                        elif 'aura' in dirpath:
+                                            fld.add_metadata({'aura':[no_ext_file]},filename)
+                                        elif data_type in no_search_obj:
+                                            if fld.check_field(obj,filename):
                                                 fld.add_metadata({data_type:[no_ext_file]},filename)
-                                            elif 'email' in dirpath:
+                                        elif 'email' in dirpath:
+                                            if fld.check_field(obj,filename):
                                                 fld.add_metadata({'email':[no_ext_file]},filename)
-                                            else:
-                                                search_obj = Search(obj,fld,filename)
-                                                if 'flow' in data_type:
-                                                    if 'work' in data_type:
-                                                        search_obj.search()
-                                                    else:
-                                                        search_obj.search_flow()
-                                                else:
-                                                    search_obj.search()
+                                        else:
+                                            search_obj = Search(obj,fld,filename)
+                                            search_obj.search()
         
         self._search_actions(meta_path,saved_objs,True)
         self._search_actions(meta_path,saved_objs,False)
@@ -138,7 +102,40 @@ class Object:
         meta_df = pd.read_csv(meta_path)
         meta_df.drop_duplicates(inplace=True)
         meta_df.to_csv(meta_path,index=False)
-        print(meta_file,'created. Open file to see all the fields and the metadata they occur in.')
+        print(meta_file,'created. Open file to see all the metadata the fields appear in.')
+
+        df_dict = {}
+        types = sorted(list(meta_df['Data Type'].unique()))
+        for fld in self.fields:
+            df_dict[fld.api_name] = {}
+            for t in types:
+               df_dict[fld.api_name][t] = 0
+               
+        for i, row in meta_df.iterrows():
+            if '__c' in row['Field Name']:
+                df_dict[row['Field Name']][row['Data Type']] += 1
+        
+        rows = []
+        for fld in df_dict.keys():
+            row = [fld]
+            for key in df_dict[fld].keys():
+                row.append(df_dict[fld][key])
+            rows.append(row)
+            
+        for row in rows:
+            total = sum(row[1:])
+            row.append(total)
+                
+        columns = ['Field Name']
+        columns.extend(types)
+        columns.append('Total')
+        field_df = pd.DataFrame(rows, columns=columns)
+        
+        field_file = self.sobject_name+' fields.csv'
+        field_path = os.path.join(os.getcwd(),field_file)
+        field_df.to_csv(field_path,index=False)
+        print(field_file,'created. Open file to see all the fields '\
+              + 'and a summary of how many metadata types they appear in.')
        
     def _search_actions(self,meta_path,saved_objs,email):
         meta_df = pd.read_csv(meta_path,sep=',')

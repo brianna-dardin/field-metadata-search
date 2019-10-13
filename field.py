@@ -12,10 +12,15 @@ class Field:
         self.sobject_name = sobject_name
         self._pattern = re.compile(r'[^a-zA-Z_]')
         
-    def check_field(self, meta_text, file_name):
+    def check_field(self, meta, file_name):
+        meta_text = meta.text
         if self.api_name.lower() in meta_text.lower():
-            relationships = self._check_relationship(meta_text)
-            rel_obj = self.sobject_name.replace('__c','__r')
+            if '.quick' in file_name:
+                rel_obj = self.sobject_name
+            else:
+                rel_obj = self.sobject_name.replace('__c','__r')
+            
+            relationships = self.check_relationship(meta_text)
             if len(relationships) > 0:
                 present = []
                 for rel in relationships:
@@ -32,20 +37,23 @@ class Field:
         else:
             return False
     
-    def _check_relationship(self,meta_text):
-        indices = re.finditer(self.api_name,meta_text)
+    def check_relationship(self,meta_text):
         relationships = []
+        indices = re.finditer(self.api_name,meta_text)
         for i in indices:
-            idx = i.start()
-            trun_text = meta_text[:idx]
-            if '.' in trun_text:
-                pattern_found = self._pattern.findall(meta_text[:idx-2])
-                if len(pattern_found) > 0:
-                    char = pattern_found[::-1][0]
-                    reverse_idx = trun_text[::-1].find(char)
-                    char_idx = len(trun_text)-reverse_idx
-                    rel = trun_text[char_idx:-1]
-                    relationships.append(rel)
+            if i.start():
+                trun_text = meta_text[:i.start()]
+                if '.' in trun_text[-1]:
+                    trun_text = trun_text[:-1]
+                    pattern_found = self._pattern.findall(trun_text)
+                    if len(pattern_found) > 0:
+                        char = pattern_found[::-1][0]
+                        reverse_idx = trun_text[::-1].find(char)
+                        char_idx = len(trun_text)-reverse_idx
+                        rel = trun_text[char_idx:]
+                        relationships.append(rel)
+                    else:
+                        relationships.append(trun_text)
         return relationships
         
     def add_metadata(self, meta_dict, file_name):

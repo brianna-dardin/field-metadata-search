@@ -10,17 +10,9 @@ def main():
     PASSWORD = input('What is your password? ')
     SECURITY_TOKEN = input('What is your security token? ')
     
-    sandbox = ''
-    while True:
-        sandbox = input('Are you logging into a sandbox? Type yes or no only. ')
-        sandbox = sandbox.lower()
-        if 'yes' in sandbox or 'no' in sandbox:
-            break
-        else:
-            print('Invalid input. Please answer yes or no only.')
-    
     auth_url = 'https://{}.salesforce.com/services/oauth2/token'
-    if 'y' in sandbox:
+    sandbox = get_boolean('Are you logging into a sandbox?')
+    if sandbox:
         auth_url = auth_url.format('test')
     else:
         auth_url = auth_url.format('login')
@@ -53,15 +45,8 @@ def main():
             print('Invalid input. Please enter a numeric API version.')
         
     if os.path.isdir(os.path.join(os.getcwd(),'src')):
-        while True:
-            re_retrieve = input('Would you like to retrieve the metadata again? Type yes or no only. ')
-            re_retrieve = re_retrieve.lower()
-            if 'yes' in re_retrieve or 'no' in re_retrieve:
-                break
-            else:
-                print('Invalid input. Please answer yes or no only.')
-                
-        if 'y' in re_retrieve:
+        re_retrieve = get_boolean('Would you like to retrieve the metadata again?')
+        if re_retrieve:
             soap = Retrieval(api_version,data)
             soap.retrieve()
     else:
@@ -79,20 +64,25 @@ def main():
         else:
             print('No fields found. Please double check the API name and try again.')
     
-    search_perm = ''
+    perm = get_boolean('Analyzing permission sets and profiles takes much longer '\
+        +'than other metadata. Do you still want to analyze them?')
+    
+    obj.search_fields(perm)
+    
+def get_boolean(msg):
+    input_str = ''
     while True:
-        search_perm = input('Analyzing permission sets and profiles takes much longer than other metadata.'\
-                            +' Do you still want to analyze them? Type yes or no only. ')
-        if 'yes' in search_perm or 'no' in search_perm:
+        input_str = input(msg + ' Type yes or no only. ')
+        input_str = input_str.lower()
+        if 'yes' in input_str or 'no' in input_str:
             break
         else:
             print('Invalid input. Please answer yes or no only.')
             
-    perm = False
-    if 'y' in search_perm:
-        perm = True
-    
-    obj.search_fields(perm)
+    boolean = False
+    if 'yes' in input_str:
+        boolean = True
+    return boolean
     
 if __name__ == '__main__':
     main()
